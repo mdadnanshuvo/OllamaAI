@@ -1,0 +1,55 @@
+
+
+services:
+  db:
+    image: postgis/postgis:latest  # PostGIS-enabled PostgreSQL image
+    container_name: tripcom_postgis
+    environment:
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mypassword
+      POSTGRES_DB: tripcom_data
+    ports:
+      - "5432:5432"  # Expose PostgreSQL/PostGIS
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tripcom_web
+    environment:
+      DATABASE_URL: postgresql://myuser:mypassword@db:5432/tripcom_data
+    volumes:
+      - ./app:/app  # Mount Django app code for development
+    ports:
+      - "8000:8000"  # Expose Django server
+    depends_on:
+      - db
+    restart: always
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: tripcom_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@tripcom.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"  # Expose pgAdmin web interface
+    depends_on:
+      - db
+    restart: always
+
+  ollama:
+    image: ollama/ollama:latest  # Ollama service image
+    container_name: ollama_service
+    ports:
+      - "11434:11434"  # Expose the Ollama service
+    volumes:
+      - ollama_data:/root/.ollama  # Persist downloaded models and configurations
+    restart: always
+
+volumes:
+  postgres_data:  # Volume for PostgreSQL database persistence
+  ollama_data:    # Volume for Ollama model persistence

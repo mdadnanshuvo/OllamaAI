@@ -1,0 +1,5 @@
+curl -X POST http://localhost:11434/v1/completions -d '{
+  "model": "tinyllama",
+  "prompt": "What is artificial intelligence?",
+  "temperature": 0.7
+}'

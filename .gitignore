@@ -1,0 +1,30 @@
+# Python-specific ignores
+*.pyc
+*.pyo
+__pycache__/
+*.env
+env/
+db.sqlite3
+
+# Django-specific ignores
+/media/
+staticfiles/
+*.log
+
+# Docker-specific ignores
+.dockerignore
+docker-compose.override.yml
+
+# Ollama-specific ignores
+ollama/models/  # Ignore the models directory to avoid pushing large files
+ollama/id_ed25519  # Ignore private key
+ollama/id_ed25519.pub  # Ignore public key if unnecessary for the repo
+
+# IDE/Editor-specific ignores
+.vscode/
+.idea/
+
+# Git-specific ignores
+*.swp
+*.swo
+*.DS_Store
