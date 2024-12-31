@@ -37,6 +37,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'property_manager',
+    'django.contrib.gis', 
 ]
 
 MIDDLEWARE = [
@@ -75,10 +77,15 @@ WSGI_APPLICATION = 'property_rewriter.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.contrib.gis.db.backends.postgis',
+        'NAME': 'tripcom_data',  # Matches DATABASE_URL in Docker Compose
+        'USER': 'myuser',        # Matches DATABASE_URL in Docker Compose
+        'PASSWORD': 'mypassword', # Matches DATABASE_URL in Docker Compose
+        'HOST': 'db',            # Refers to the database service name in Docker Compose
+        'PORT': '5432',          # Standard PostgreSQL port
     }
 }
+
 
 
 # Password validation

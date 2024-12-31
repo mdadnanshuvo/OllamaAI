@@ -1,5 +1,9 @@
-curl -X POST http://localhost:11434/v1/completions -d '{
-  "model": "tinyllama",
-  "prompt": "What is artificial intelligence?",
-  "temperature": 0.7
+curl -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key="AIzaSyD702s1yRxSnalEkUB9xULNqGpSYoFvDuw" \
+-H "Content-Type: application/json" \
+-d '{
+  "contents": [{
+    "parts": [{
+      "text": "Explain how AI works"
+    }]
+  }]
 }'

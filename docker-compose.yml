@@ -2,54 +2,65 @@
 
 services:
   db:
-    image: postgis/postgis:latest  # PostGIS-enabled PostgreSQL image
-    container_name: tripcom_postgis
+    image: postgis/postgis:latest
+    container_name: ollama_postgis
     environment:
       POSTGRES_USER: myuser
       POSTGRES_PASSWORD: mypassword
       POSTGRES_DB: tripcom_data
     ports:
-      - "5432:5432"  # Expose PostgreSQL/PostGIS
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: always
+    networks:
+      - ollama_network  # Ensuring the container is in the custom network
 
   web:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: tripcom_web
+    container_name: ollama_web
     environment:
       DATABASE_URL: postgresql://myuser:mypassword@db:5432/tripcom_data
+      API_KEY: AIzaSyD702s1yRxSnalEkUB9xULNqGpSYoFvDuw  # API key from .env file
     volumes:
-      - ./app:/app  # Mount Django app code for development
+      - ./app:/app
     ports:
-      - "8000:8000"  # Expose Django server
+      - "8000:8000"
     depends_on:
       - db
     restart: always
+    networks:
+      - ollama_network  # Ensuring the container is in the custom network
 
   pgadmin:
     image: dpage/pgadmin4
-    container_name: tripcom_pgadmin
+    container_name: ollama_pgadmin
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@tripcom.com
       PGADMIN_DEFAULT_PASSWORD: admin
     ports:
-      - "5050:80"  # Expose pgAdmin web interface
+      - "5050:80"
     depends_on:
       - db
     restart: always
+    networks:
+      - ollama_network  # Ensuring the container is in the custom network
 
-  ollama:
-    image: ollama/ollama:latest  # Ollama service image
-    container_name: ollama_service
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: open-webui
     ports:
-      - "11434:11434"  # Expose the Ollama service
-    volumes:
-      - ollama_data:/root/.ollama  # Persist downloaded models and configurations
-    restart: always
+      - "3000:8080"
+    restart: unless-stopped
+    networks:
+      - ollama_network  # Ensuring the container is in the custom network
 
 volumes:
-  postgres_data:  # Volume for PostgreSQL database persistence
-  ollama_data:    # Volume for Ollama model persistence
+  postgres_data:
+  ollama_data:
+
+networks:
+  ollama_network:
+    driver: bridge  # Explicitly defining a custom network with the bridge driver
