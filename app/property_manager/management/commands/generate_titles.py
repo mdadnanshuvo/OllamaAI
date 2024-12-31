@@ -1,50 +1,81 @@
+import os
 import requests
+import importlib.util
 from django.core.management.base import BaseCommand
 
+
 class Command(BaseCommand):
-    help = "Regenerate titles and descriptions for properties using the Gemini API."
+    help = "Regenerate titles and generate descriptions for properties using the Gemini API."
 
     def handle(self, *args, **kwargs):
+        # Import the parse_properties_from_sql function dynamically
+        parse_properties_from_sql = self.import_parse_function()
+
         # Hardcoded Gemini API Key and URL
         api_key = 'AIzaSyD702s1yRxSnalEkUB9xULNqGpSYoFvDuw'
         api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
 
-        # Sample prompt for testing
-        prompt = "Rewrite this property title to make it more engaging: Beautiful 2-bedroom apartment"
-
-        # Prepare the payload for the API request
-        payload = {
-            "contents": [{
-                "parts": [{
-                    "text": prompt
-                }]
-            }]
-        }
-
+        # Parse properties from the SQL file
+        self.stdout.write("Parsing properties from the SQL file...")
         try:
+            properties = parse_properties_from_sql()
+        except FileNotFoundError:
+            self.stdout.write(self.style.ERROR("SQL file not found."))
+            return
+
+        if not properties:
+            self.stdout.write(self.style.ERROR("No properties found to process."))
+            return
+
+        # Process each property
+        self.stdout.write("Processing properties for titles and descriptions...")
+        for property_data in properties:
+            # Generate a new title
+            title_prompt = f"Rewrite this property title to make it more engaging: {property_data['title']}"
+            new_title = self.generate_text(title_prompt, api_key, api_url)
+
+            # Generate a new description based on the new title
+            description_prompt = f"Generate a detailed and concise description for this property titled '{new_title}':"
+            new_description = self.generate_text(description_prompt, api_key, api_url)
+
+            # Update the property data with the new title and description
+            property_data['title'] = new_title
+            property_data['description'] = new_description
+
+            # Print updated property details
+            self.stdout.write(f"ID: {property_data['id']} - New Title: {new_title}")
+            self.stdout.write(f"ID: {property_data['id']} - New Description: {new_description}")
+
+        self.stdout.write(self.style.SUCCESS("Successfully processed all properties."))
+
+    def generate_text(self, prompt, api_key, api_url):
+        """Function to call the Gemini API to generate text."""
+        try:
+            # Prepare the payload for the API request
+            payload = {
+                "contents": [{
+                    "parts": [{
+                        "text": prompt
+                    }]
+                }]
+            }
+
             # Make the POST request to the Gemini API
             response = requests.post(api_url, json=payload)
 
             # Handle the response
             if response.status_code == 200:
                 result = response.json()
-                print("API Response:", result)
-                # Try to extract and parse the rewritten text from the response
                 rewritten_text = self.extract_rewritten_text(result)
-                if rewritten_text:
-                    print("Rewritten Text:")
-                    for idx, option in enumerate(rewritten_text, start=1):
-                        print(f"Option {idx}: {option}")
-                else:
-                    print("Error: No rewritten text found in response.")
+                return rewritten_text if rewritten_text else "Error: No rewritten text found in response."
             else:
-                print(f"API Error: {response.status_code} - {response.text}")
+                return f"Error: {response.status_code} - {response.text}"
 
         except requests.exceptions.RequestException as e:
-            print(f"Request failed: {e}")
+            return f"Request failed: {e}"
 
     def extract_rewritten_text(self, response_json):
-        """Extract rewritten text from the Gemini API response and return a list of options."""
+        """Extract rewritten text from the Gemini API response."""
         try:
             # The structure may differ depending on the API's response
             candidates = response_json.get('candidates', [])
@@ -52,18 +83,17 @@ class Command(BaseCommand):
                 content = candidates[0].get('content', {})
                 parts = content.get('parts', [])
                 if parts:
-                    # Extract the text content of each option
+                    # Extract the text content
                     raw_text = parts[0].get('text', '')
-                    # Split the options based on the * delimiter
-                    options = self.parse_options(raw_text)
-                    return options
+                    return raw_text.strip()
             return None
         except (KeyError, IndexError) as e:
             return None
 
-    def parse_options(self, raw_text):
-        """Parse the raw text into a list of readable and concise options."""
-        # Split the options by '*', which is how they are separated in the API response
-        options = raw_text.split('\n\n* ')
-        options = [option.strip('* ').strip() for option in options if option]
-        return options
+    def import_parse_function(self):
+        """Import the parse_properties_from_sql function dynamically."""
+        parse_path = os.path.join(os.path.dirname(__file__), "/app/Data_Parsing/parse.py")
+        spec = importlib.util.spec_from_file_location("parse", parse_path)
+        parse_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(parse_module)
+        return parse_module.parse_properties_from_sql
