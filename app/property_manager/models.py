@@ -1,19 +1,22 @@
+import uuid
 from django.contrib.gis.db import models  # For geospatial data support
+
 
 class Property(models.Model):
     """
     Represents a property with its basic details.
     """
+    id = models.CharField(max_length=255, primary_key=True)  # Matches your existing UUID primary key
     title = models.CharField(max_length=255, null=True, blank=True)
     rating = models.FloatField(null=True, blank=True)
     location = models.CharField(max_length=255, null=True, blank=True)
     latitude = models.FloatField(null=True, blank=True)
     longitude = models.FloatField(null=True, blank=True)
-    geom = models.PointField(null=True, blank=True, srid=4326)  # Spatial data
+    geom = models.PointField(null=True, blank=True, srid=4326)  # Spatial data for geolocation
     price = models.CharField(max_length=255, null=True, blank=True)
     image_url = models.CharField(max_length=255, null=True, blank=True)
     city_id = models.CharField(max_length=255, null=True, blank=True)
-    description = models.TextField(null=True, blank=True)  # New description field
+    description = models.TextField(null=True, blank=True)  # New field for the property description
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
