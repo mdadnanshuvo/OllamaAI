@@ -1,8 +1,10 @@
 import os
+import time
 import requests
 import importlib.util
 from django.core.management.base import BaseCommand
-from property_manager.models import Property, PropertySummary, PropertyRating 
+from property_manager.models import Property, PropertySummary, PropertyRating
+from django.db.models import Count
 
 class Command(BaseCommand):
     help = "Regenerate titles, descriptions, summaries, and reviews for properties using the Gemini API. Automatically generate missing data."
@@ -30,89 +32,115 @@ class Command(BaseCommand):
         # Process each property
         self.stdout.write("Processing properties for titles, descriptions, summaries, and reviews...")
         for property_data in properties:
-            # Regenerate missing or empty fields
-            if not property_data.get('title'):
-                property_data['title'] = self.generate_text(
-                    "Generate a title for a property with no title.", api_key, api_url
+            # Regenerate missing or empty fields using Gemini API if necessary
+            title = property_data.get('title')
+            description = property_data.get('description')
+            summary = property_data.get('summary')
+            review = property_data.get('reviews')
+            rating = property_data.get('rating')  # Rating is fetched from the SQL data
+
+            # Handle missing fields and regenerate them
+            if not title:
+                title = self.generate_text_with_retry(
+                    "Generate a professional, eye-catching, appealing title for a luxury hotel property.",
+                    api_key, api_url
+                )
+            
+            if not description:
+                description = self.generate_text_with_retry(
+                    f"Generate a concise and professional description for a luxury hotel titled '{title}':",
+                    api_key, api_url
                 )
 
-            if not property_data.get('description'):
-                description_prompt = f"Generate a detailed and concise description for the property titled '{property_data['title']}':"
-                property_data['description'] = self.generate_text(description_prompt, api_key, api_url)
+            if not summary:
+                summary = self.generate_text_with_retry(
+                    f"Generate a concise, engaging summary for the luxury hotel titled '{title}':",
+                    api_key, api_url
+                )
 
-            # Generate summary for PropertySummary table
-            summary_prompt = f"Generate a short and engaging summary for the property titled '{property_data['title']}':"
-            new_summary = self.generate_text(summary_prompt, api_key, api_url)
+            # Generate review based on rating
+            if not review or not rating:
+                # Ensure the rating is provided by the parsing method and review is generated
+                review = self.generate_review_based_on_rating(rating, title, api_key, api_url)
+                rating = rating or 5.0  # Default rating if it's still missing
+            else:
+                review = review or "A wonderful stay with exceptional service. Highly recommended!"
+                rating = rating or 5.0
 
-            # Generate reviews and ratings for PropertyRating table
-            review_prompt = f"Generate a positive review and a rating (out of 5) for the property titled '{property_data['title']}':"
-            review_and_rating = self.generate_text(review_prompt, api_key, api_url)
+            # Only proceed if all critical fields are non-empty
+            if title and description and summary and review and rating:
+                # Save to the database
+                property_instance, created = Property.objects.update_or_create(
+                    id=property_data['id'],
+                    defaults={
+                        'title': title,
+                        'rating': rating,
+                        'location': property_data.get('location'),
+                        'latitude': property_data.get('latitude'),
+                        'longitude': property_data.get('longitude'),
+                        'price': property_data.get('price'),
+                        'image_url': property_data.get('image_url'),
+                        'city_id': property_data.get('city_id'),
+                        'description': description,
+                    },
+                )
 
-            # Parse the review and rating (assuming the response contains "Review: ... Rating: ...")
-            review, rating = self.parse_review_and_rating(review_and_rating)
+                # Save or update PropertySummary
+                PropertySummary.objects.update_or_create(
+                    property=property_instance,
+                    defaults={'summary': summary},
+                )
 
-            # Save to the database
-            property_instance, created = Property.objects.update_or_create(
-                id=property_data['id'],
-                defaults={
-                    'title': property_data['title'],
-                    'rating': rating if rating else property_data.get('rating'),
-                    'location': property_data.get('location'),
-                    'latitude': property_data.get('latitude'),
-                    'longitude': property_data.get('longitude'),
-                    'price': property_data.get('price'),
-                    'image_url': property_data.get('image_url'),
-                    'city_id': property_data.get('city_id'),
-                    'description': property_data['description'],
-                },
-            )
+                # Handling PropertyRating to avoid MultipleObjectsReturned
+                self.update_or_create_property_rating(property_instance, review, rating)
 
-            # Save or update PropertySummary
-            PropertySummary.objects.update_or_create(
-                property=property_instance,
-                defaults={'summary': new_summary},
-            )
-
-            # Save or update PropertyRating
-            PropertyRating.objects.create(
-                property=property_instance,
-                rating=rating,
-                review=review,
-            )
-
-            # Log the results
-            self.stdout.write(f"ID: {property_instance.id} - New Title: {property_data['title']}")
-            self.stdout.write(f"ID: {property_instance.id} - New Description: {property_data['description']}")
-            self.stdout.write(f"ID: {property_instance.id} - New Summary: {new_summary}")
-            self.stdout.write(f"ID: {property_instance.id} - New Review: {review} (Rating: {rating})")
-
+                # Log the results
+                self.stdout.write(f"ID: {property_instance.id} - New Title: {title}")
+                self.stdout.write(f"ID: {property_instance.id} - New Description: {description}")
+                self.stdout.write(f"ID: {property_instance.id} - New Summary: {summary}")
+                self.stdout.write(f"ID: {property_instance.id} - New Review: {review} (Rating: {rating})")
+            else:
+                # If any critical field is missing, log and skip the property
+                self.stdout.write(self.style.ERROR(f"Skipped property ID {property_data['id']} due to missing fields."))
+        
         self.stdout.write(self.style.SUCCESS("Successfully processed all properties."))
 
-    def generate_text(self, prompt, api_key, api_url):
-        """Function to call the Gemini API to generate text."""
-        try:
-            # Prepare the payload for the API request
-            payload = {
-                "contents": [{
-                    "parts": [{
-                        "text": prompt
+    def generate_text_with_retry(self, prompt, api_key, api_url, max_retries=5, backoff_factor=2):
+        """Function to call the Gemini API with retry logic."""
+        retries = 0
+        while retries < max_retries:
+            try:
+                # Prepare the payload for the API request
+                payload = {
+                    "contents": [{
+                        "parts": [{
+                            "text": prompt
+                        }]
                     }]
-                }]
-            }
+                }
 
-            # Make the POST request to the Gemini API
-            response = requests.post(api_url, json=payload)
+                # Make the POST request to the Gemini API
+                response = requests.post(api_url, json=payload)
 
-            # Handle the response
-            if response.status_code == 200:
-                result = response.json()
-                rewritten_text = self.extract_rewritten_text(result)
-                return rewritten_text if rewritten_text else "Error: No rewritten text found in response."
-            else:
-                return f"Error: {response.status_code} - {response.text}"
+                # Handle the response
+                if response.status_code == 200:
+                    result = response.json()
+                    rewritten_text = self.extract_rewritten_text(result)
+                    return rewritten_text if rewritten_text else "Error: No rewritten text found in response."
+                elif response.status_code == 429:
+                    # Handle rate limit exceeded: Retry after waiting
+                    retries += 1
+                    wait_time = backoff_factor ** retries  # Exponential backoff
+                    print(f"Rate limit exceeded, retrying in {wait_time} seconds...")
+                    time.sleep(wait_time)  # Wait before retrying
+                else:
+                    return f"Error: {response.status_code} - {response.text}"
 
-        except requests.exceptions.RequestException as e:
-            return f"Request failed: {e}"
+            except requests.exceptions.RequestException as e:
+                print(f"Request failed: {e}")
+                break
+
+        return "Error: Unable to generate text after multiple retries."
 
     def extract_rewritten_text(self, response_json):
         """Extract rewritten text from the Gemini API response."""
@@ -128,17 +156,38 @@ class Command(BaseCommand):
         except (KeyError, IndexError) as e:
             return None
 
-    def parse_review_and_rating(self, review_and_rating_text):
-        """Parse the review and rating from the response."""
-        try:
-            # Assuming the format: "Review: ... Rating: ..."
-            if "Review:" in review_and_rating_text and "Rating:" in review_and_rating_text:
-                review = review_and_rating_text.split("Review:")[1].split("Rating:")[0].strip()
-                rating = float(review_and_rating_text.split("Rating:")[1].strip())
-                return review, rating
-            return "No review available", 0.0
-        except Exception as e:
-            return "Error parsing review", 0.0
+    def generate_review_based_on_rating(self, rating, title, api_key, api_url):
+        """Generate a unique and eye-catching review based on the rating using Gemini API."""
+        rating = float(rating)  # Ensure rating is a float
+        if rating >= 4.5:
+            prompt = f"Generate a highly positive, unique, and eye-catching review for a luxury hotel titled '{title}' with a rating of {rating}. It should sound like a human review."
+        elif rating >= 3.5:
+            prompt = f"Generate a positive, unique, and eye-catching review for a luxury hotel titled '{title}' with a rating of {rating}. It should sound like a human review."
+        elif rating >= 2.5:
+            prompt = f"Generate a neutral, professional review for a luxury hotel titled '{title}' with a rating of {rating}. It should sound like a human review."
+        else:
+            prompt = f"Generate a constructive, human-sounding review for a luxury hotel titled '{title}' with a rating of {rating}. It should be professional and insightful."
+
+        # Call Gemini API to generate review based on the rating
+        review = self.generate_text_with_retry(prompt, api_key, api_url)
+        return review
+
+    def update_or_create_property_rating(self, property_instance, review, rating):
+        """Handle creating or updating PropertyRating."""
+        # First, try to find any existing rating for the property
+        existing_rating = PropertyRating.objects.filter(property=property_instance).first()
+        if existing_rating:
+            # Update existing rating if found
+            existing_rating.rating = rating
+            existing_rating.review = review
+            existing_rating.save()
+        else:
+            # Create new rating if no existing rating found
+            PropertyRating.objects.create(
+                property=property_instance,
+                rating=rating,
+                review=review,
+            )
 
     def import_parse_function(self):
         """Import the parse_properties_from_sql function dynamically."""
