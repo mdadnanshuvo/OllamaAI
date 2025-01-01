@@ -60,7 +60,6 @@ class Command(BaseCommand):
 
             # Generate review based on rating
             if not review or not rating:
-                # Ensure the rating is provided by the parsing method and review is generated
                 review = self.generate_review_based_on_rating(rating, title, api_key, api_url)
                 rating = rating or 5.0  # Default rating if it's still missing
             else:
@@ -99,11 +98,44 @@ class Command(BaseCommand):
                 self.stdout.write(f"ID: {property_instance.id} - New Description: {description}")
                 self.stdout.write(f"ID: {property_instance.id} - New Summary: {summary}")
                 self.stdout.write(f"ID: {property_instance.id} - New Review: {review} (Rating: {rating})")
+
+                # Display all the fields of the Property, PropertySummary, and PropertyRating tables
+                self.display_all_columns(property_instance)
             else:
-                # If any critical field is missing, log and skip the property
                 self.stdout.write(self.style.ERROR(f"Skipped property ID {property_data['id']} due to missing fields."))
         
         self.stdout.write(self.style.SUCCESS("Successfully processed all properties."))
+
+    def display_all_columns(self, property_instance):
+        """Display all columns of Property, PropertySummary, and PropertyRating tables."""
+        try:
+            # Fetch related data
+            property_summary = PropertySummary.objects.get(property=property_instance)
+            property_rating = PropertyRating.objects.filter(property=property_instance).first()
+
+            # Display all columns of Property, PropertySummary, and PropertyRating
+            self.stdout.write(f"Property ID: {property_instance.id}")
+            self.stdout.write(f"Title: {property_instance.title}")
+            self.stdout.write(f"Description: {property_instance.description}")
+            self.stdout.write(f"Location: {property_instance.location}")
+            self.stdout.write(f"Price: {property_instance.price}")
+            self.stdout.write(f"Latitude: {property_instance.latitude}")
+            self.stdout.write(f"Longitude: {property_instance.longitude}")
+            self.stdout.write(f"City ID: {property_instance.city_id}")
+            self.stdout.write(f"Image URL: {property_instance.image_url}")
+            self.stdout.write(f"Rating: {property_instance.rating}")
+            
+            if property_summary:
+                self.stdout.write(f"Summary: {property_summary.summary}")
+            
+            if property_rating:
+                self.stdout.write(f"Review: {property_rating.review}")
+                self.stdout.write(f"Rating: {property_rating.rating}")
+
+        except PropertySummary.DoesNotExist:
+            self.stdout.write(self.style.WARNING(f"Summary not found for Property ID: {property_instance.id}"))
+        except PropertyRating.DoesNotExist:
+            self.stdout.write(self.style.WARNING(f"Rating not found for Property ID: {property_instance.id}"))
 
     def generate_text_with_retry(self, prompt, api_key, api_url, max_retries=5, backoff_factor=2):
         """Function to call the Gemini API with retry logic."""
@@ -157,7 +189,7 @@ class Command(BaseCommand):
             return None
 
     def generate_review_based_on_rating(self, rating, title, api_key, api_url):
-        """Generate a unique and eye-catching review based on the rating using Gemini API."""
+        """Generate a concise, unique and eye-catching review based on the rating using Gemini API."""
         rating = float(rating)  # Ensure rating is a float
         if rating >= 4.5:
             prompt = f"Generate a highly positive, unique, and eye-catching review for a luxury hotel titled '{title}' with a rating of {rating}. It should sound like a human review."
