@@ -79,6 +79,6 @@ OLAMAAI/
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/yourusername/ollamaai.git
-   cd ollamaai
+   git clone https://github.com/mdadnanshuvo/OllamaAI.git
+   cd OllamaAI
  ```
