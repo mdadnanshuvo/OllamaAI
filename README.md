@@ -130,12 +130,9 @@ docker-compose exec web python manage.py parse_properties
 To ensure reliability, run the test suite:
 
 ```bash
-docker-compose exec web pytest
+docker-compose exec web pytest --cov=property_manager --cov-report=term
 ```
 
-### Check Test Coverage
-```bash
-docker-compose exec web pytest --cov=.
-```
+
 
 
