@@ -81,4 +81,61 @@ OLAMAAI/
    ```bash
    git clone https://github.com/mdadnanshuvo/OllamaAI.git
    cd OllamaAI
- ```
+   ```
+2. Build and Start Docker Containers
+
+```bash
+docker-compose up --build
+```
+Run Database Migrations
+
+```bash
+docker-compose exec web python manage.py migrate
+
+```
+## Usage
+
+### Access the Application
+
+1. **Start the development server**:
+   ```bash
+   docker-compose up
+   ```
+   Open in Browser
+   - **Web Application:** [http://localhost:8000](http://localhost:8000)
+- **PgAdmin:** [http://localhost:5050](http://localhost:5050)
+
+# CLI Commands
+
+## Generate Data with AI
+
+Regenerate Property Data
+```bash
+
+docker-compose exec web python manage.py generate_data
+```
+## Parse Data from SQL
+
+### Parse SQL Dump
+
+Ensure the SQL file is placed in `app/Data_Parsing/`. Run:
+
+```bash
+docker-compose exec web python manage.py parse_properties
+```
+
+## Testing
+
+### Run Tests
+To ensure reliability, run the test suite:
+
+```bash
+docker-compose exec web pytest
+```
+
+### Check Test Coverage
+```bash
+docker-compose exec web pytest --cov=.
+```
+
+
