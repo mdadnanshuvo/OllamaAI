@@ -132,7 +132,9 @@ The re-generated and newly-generated data can be seen in the terminal. For the f
 Ensure the SQL file is placed in `app/Data_Parsing/`. Run:
 
 ```bash
-docker-compose exec web python parse.py
+
+docker exec -it ollama_web bash -c "cd /app/Data_Parsing && python parse.py"
+
 ```
 
 The data utilized in this project is derived from the previously completed assignment, scrapy-data. Specifically, a backup file from that assignment serves as the source. The parse.py script is employed to parse the SQL backup file, process its contents, and prepare the data for use as input into the Gemini system. This structured workflow ensures seamless integration and efficient data handling.
