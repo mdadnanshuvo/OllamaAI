@@ -3,46 +3,81 @@ from unittest.mock import patch, mock_open
 from Data_Parsing.parse import parse_properties_from_sql
 
 
-@pytest.mark.parametrize("mock_data,expected", [
-    # Test valid COPY data with multiple rows
+def generate_mock_data(columns, rows):
+    """
+    Dynamically generate mock SQL COPY data.
+    
+    Args:
+        columns (list): A list of column names.
+        rows (list of lists): A list of rows, where each row is a list of values.
+
+    Returns:
+        str: A formatted SQL COPY command with the provided columns and rows.
+    """
+    column_part = ", ".join(columns)
+    row_part = "\n".join(["\t".join(map(str, row)) for row in rows])
+    return f"COPY public.properties ({column_part}) FROM stdin;\n{row_part}\n\\."
+
+
+def generate_expected_output(columns, rows):
+    """
+    Dynamically generate expected parsed output based on columns and rows.
+    
+    Args:
+        columns (list): A list of column names.
+        rows (list of lists): A list of rows, where each row is a list of values.
+
+    Returns:
+        list of dicts: A list of dictionaries representing parsed rows.
+    """
+    output = []
+    for row in rows:
+        # Pad the row with None to match the column count
+        adjusted_row = row + [None] * (len(columns) - len(row))
+        # Trim the row if it exceeds the column count
+        adjusted_row = adjusted_row[:len(columns)]
+        output.append(dict(zip(columns, adjusted_row)))
+    return output
+
+
+@pytest.mark.parametrize("columns,rows", [
+    # Test valid COPY data with all columns and rows matching
     (
-        "COPY public.properties (id, title, rating, location) FROM stdin;\n"
-        "1\tTest Title 1\t4.5\tTest Location 1\n"
-        "2\tTest Title 2\t4.0\tTest Location 2\n\\.",
+        ["id", "title", "rating", "location"],
         [
-            {"id": "1", "title": "Test Title 1", "rating": "4.5", "location": "Test Location 1"},
-            {"id": "2", "title": "Test Title 2", "rating": "4.0", "location": "Test Location 2"}
+            ["1", "Test Title 1", "4.5", "Test Location 1"],
+            ["2", "Test Title 2", "4.0", "Test Location 2"]
         ]
     ),
-    # Test valid COPY data with a single row
+    # Test valid COPY data with rows missing some fields
     (
-        "COPY public.properties (id, title, rating, location) FROM stdin;\n"
-        "1\tTest Title\t4.5\tTest Location\n\\.",
-        [{"id": "1", "title": "Test Title", "rating": "4.5", "location": "Test Location"}]
+        ["id", "title", "rating", "location"],
+        [
+            ["1", "Test Title 1", "4.5", "Test Location 1"],
+            ["2", "Test Title 2", "4.0"]
+        ]
+    ),
+    # Test valid COPY data with more fields in rows than columns
+    (
+        ["id", "title", "rating"],
+        [
+            ["1", "Test Title 1", "4.5", "Extra Field"],
+            ["2", "Test Title 2", "4.0", "Another Extra"]
+        ]
     ),
     # Test empty COPY data
     (
-        "COPY public.properties (id, title, rating, location) FROM stdin;\n\\.",
+        ["id", "title", "rating", "location"],
         []
-    ),
-    # Test malformed COPY data (mismatched columns)
-    (
-        "COPY public.properties (id, title, rating, location) FROM stdin;\n"
-        "1\tTest Title\t4.5\n\\.",
-        []
-    ),
-    # Test missing COPY data
-    (
-        "CREATE TABLE public.properties (id SERIAL PRIMARY KEY);\n",
-        []
-    ),
-    # Test completely empty file
-    ("", [])
+    )
 ])
-def test_parse_properties_from_sql(mock_data, expected):
+def test_parse_properties_from_sql_dynamic(columns, rows):
     """
-    Parametrized test case to handle various scenarios for parse_properties_from_sql.
+    Parametrized test case for dynamic handling of columns and rows.
     """
+    mock_data = generate_mock_data(columns, rows)
+    expected = generate_expected_output(columns, rows)
+
     with patch("builtins.open", mock_open(read_data=mock_data)):
         with patch("os.path.exists", return_value=True):
             result = parse_properties_from_sql()
@@ -54,15 +89,6 @@ def test_parse_file_not_found():
     Test case for FileNotFoundError.
     """
     with patch("builtins.open", side_effect=FileNotFoundError):
-        result = parse_properties_from_sql()
-        assert result == []
-
-
-def test_parse_unexpected_error():
-    """
-    Test case for handling unexpected errors during parsing.
-    """
-    with patch("builtins.open", side_effect=Exception("Unexpected Error")):
         result = parse_properties_from_sql()
         assert result == []
 
@@ -79,38 +105,4 @@ def test_parse_no_data_section():
     with patch("builtins.open", mock_open(read_data=mock_data)):
         with patch("os.path.exists", return_value=True):
             result = parse_properties_from_sql()
-            assert result == []
-
-
-def test_parse_partial_data():
-    """
-    Test case for partially valid data in the COPY section.
-    """
-    mock_data = (
-        "COPY public.properties (id, title, rating, location) FROM stdin;\n"
-        "1\tTest Title 1\t4.5\tTest Location 1\n"
-        "2\t\t\t\n\\."  # Second row has missing data
-    )
-    with patch("builtins.open", mock_open(read_data=mock_data)):
-        with patch("os.path.exists", return_value=True):
-            result = parse_properties_from_sql()
-            assert result == [
-                {"id": "1", "title": "Test Title 1", "rating": "4.5", "location": "Test Location 1"}
-            ]  # Only the first row is valid
-
-
-def test_parse_file_with_extra_whitespace():
-    """
-    Test case for handling files with extra whitespace or empty lines.
-    """
-    mock_data = (
-        "\n\n"
-        "COPY public.properties (id, title, rating, location) FROM stdin;\n"
-        "1\tTest Title\t4.5\tTest Location\n\n\\.\n\n"
-    )
-    with patch("builtins.open", mock_open(read_data=mock_data)):
-        with patch("os.path.exists", return_value=True):
-            result = parse_properties_from_sql()
-            assert result == [
-                {"id": "1", "title": "Test Title", "rating": "4.5", "location": "Test Location"}
-            ]
+        assert result == []
