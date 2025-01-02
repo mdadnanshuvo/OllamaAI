@@ -82,17 +82,17 @@ OLAMAAI/
    git clone https://github.com/mdadnanshuvo/OllamaAI.git
    cd OllamaAI
    ```
-2. Build and Start Docker Containers
+ 2. Build and Start Docker Containers
 
-```bash
-docker-compose up --build
-```
-Run Database Migrations
+ ```bash
+ docker-compose up --build
+ ```
+  Run Database Migrations
 
-```bash
-docker-compose exec web python manage.py migrate
+  ```bash
+  docker-compose exec web python manage.py migrate
 
-```
+  ```
 ## Usage
 
 ### Access the Application
