@@ -103,7 +103,7 @@ docker-compose exec web python manage.py migrate
    ```
    Open in Browser
    - **Web Application:** [http://localhost:8000](http://localhost:8000)
-- **PgAdmin:** [http://localhost:5050](http://localhost:5050)
+   - **PgAdmin:** [http://localhost:5050](http://localhost:5050)
 
 # CLI Commands
 
@@ -114,6 +114,17 @@ Regenerate Property Data
 
 docker-compose exec web python manage.py generate_data
 ```
+
+The re-generated and newly-generated data can be seen in the terminal. For the full updated data in the existing database, please access the PgAdmin panel using the following credentials:
+
+- **Username:** myuser
+- **Password:** mypassword
+- **Database:** tripcom_data
+- **Host:** localhost
+- **Port:** 5432
+ 
+
+
 ## Parse Data from SQL
 
 ### Parse SQL Dump
