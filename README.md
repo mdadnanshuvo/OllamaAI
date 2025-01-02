@@ -47,7 +47,7 @@ OLAMAAI/
 │   ├── Data_Parsing/
 │   │   ├── __init__.py
 │   │   ├── parse.py                # Parses property data from SQL files
-│   │   └── tripcom_backup.sql      # Sample SQL file for parsing
+│   │   └── tripcom_backup.sql      # Scraped-SQL file for parsing
 │   ├── property_manager/
 │   │   ├── management/
 │   │   │   └── commands/
